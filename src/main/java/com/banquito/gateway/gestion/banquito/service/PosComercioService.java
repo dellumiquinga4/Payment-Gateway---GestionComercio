@@ -2,6 +2,8 @@ package com.banquito.gateway.gestion.banquito.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.extern.slf4j.Slf4j;
 
 import com.banquito.gateway.gestion.banquito.model.PosComercio;
@@ -13,6 +15,7 @@ import com.banquito.gateway.gestion.banquito.exception.BusinessException;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 @Slf4j
@@ -20,6 +23,7 @@ public class PosComercioService {
 
     private static final int MAX_POS_POR_COMERCIO = 10;
     private static final int DIAS_INACTIVIDAD_MAXIMO = 90;
+    private static final Pattern MAC_PATTERN = Pattern.compile("^([0-9A-Fa-f]{2}[:-]){5}([0-9A-Fa-f]{2})$");
 
     private final PosComercioRepository posComercioRepository;
     private final ComercioService comercioService;
@@ -30,9 +34,9 @@ public class PosComercioService {
     }
 
     @Transactional(readOnly = true)
-    public List<PosComercio> findAll() {
-        log.info("Obteniendo todos los POS comercio");
-        return this.posComercioRepository.findAll();
+    public Page<PosComercio> findAll(Pageable pageable) {
+        log.info("Obteniendo todos los POS comercio paginados");
+        return this.posComercioRepository.findAll(pageable);
     }
 
     @Transactional(readOnly = true)
@@ -46,23 +50,11 @@ public class PosComercioService {
     public PosComercio create(PosComercio posComercio) {
         log.info("Creando nuevo POS comercio: {}", posComercio);
         
-        
         Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
-        if (!"ACT".equals(comercio.getEstado())) {
-            throw new BusinessException("No se puede crear un POS para un comercio inactivo");
-        }
-
-        
-        List<PosComercio> posExistentes = findByComercio(comercio.getCodigoComercio());
-        if (posExistentes.size() >= MAX_POS_POR_COMERCIO) {
-            throw new BusinessException("El comercio ha alcanzado el límite máximo de " + MAX_POS_POR_COMERCIO + " POS");
-        }
-
-        
-        List<PosComercio> posConMismaMac = this.posComercioRepository.findByDireccionMac(posComercio.getDireccionMac());
-        if (!posConMismaMac.isEmpty()) {
-            throw new BusinessException("Ya existe un POS registrado con la dirección MAC proporcionada");
-        }
+        validarComercioActivo(comercio);
+        validarLimitePosComercio(comercio.getCodigoComercio());
+        validarDireccionMac(posComercio.getDireccionMac());
+        validarMacUnica(posComercio.getDireccionMac());
 
         posComercio.setComercio(comercio);
         posComercio.setFechaActivacion(LocalDateTime.now());
@@ -73,50 +65,27 @@ public class PosComercioService {
     }
 
     @Transactional
-    public PosComercio update(String codigoPos, PosComercio posComercio) {
-        log.info("Actualizando POS comercio con código: {}", codigoPos);
-        
-        PosComercio posExistente = findById(codigoPos);
-        Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
-
-        
-        if (!"ACT".equals(comercio.getEstado())) {
-            throw new BusinessException("No se puede actualizar un POS para un comercio inactivo");
-        }
-
-        
-        if (!posExistente.getComercio().getCodigoComercio().equals(comercio.getCodigoComercio())) {
-            throw new BusinessException("No se permite cambiar el comercio asociado al POS");
-        }
-
-        
-        if (!posExistente.getDireccionMac().equals(posComercio.getDireccionMac())) {
-            List<PosComercio> posConMismaMac = this.posComercioRepository.findByDireccionMac(posComercio.getDireccionMac());
-            if (!posConMismaMac.isEmpty()) {
-                throw new BusinessException("Ya existe un POS registrado con la dirección MAC proporcionada");
-            }
-        }
-
-        
-        if ("ACT".equals(posComercio.getEstado()) && "INA".equals(posExistente.getEstado())) {
-            posComercio.setFechaActivacion(LocalDateTime.now());
-            posComercio.setUltimoUso(LocalDateTime.now());
-        } else {
-            posComercio.setFechaActivacion(posExistente.getFechaActivacion());
-            posComercio.setUltimoUso(posExistente.getUltimoUso());
-        }
-
-        posComercio.setCodigoPos(codigoPos);
-        posComercio.setComercio(comercio);
-        
-        return this.posComercioRepository.save(posComercio);
-    }
-
-    @Transactional
     public void delete(String codigoPos) {
         log.info("Eliminando POS comercio con código: {}", codigoPos);
         PosComercio posComercio = findById(codigoPos);
+        
+        if ("ACT".equals(posComercio.getEstado())) {
+            throw new BusinessException("No se puede eliminar un POS activo. Debe inactivarlo primero");
+        }
+        
         this.posComercioRepository.delete(posComercio);
+    }
+
+    @Transactional(readOnly = true)
+    public Page<PosComercio> findByComercio(String codigoComercio, Pageable pageable) {
+        log.info("Buscando POS por código de comercio: {}", codigoComercio);
+        return this.posComercioRepository.findByComercioCodigoComercio(codigoComercio, pageable);
+    }
+
+    @Transactional(readOnly = true)
+    public List<PosComercio> findByModelo(String modelo) {
+        log.info("Buscando POS por modelo: {}", modelo);
+        return this.posComercioRepository.findByModelo(modelo);
     }
 
     @Transactional
@@ -150,21 +119,29 @@ public class PosComercioService {
         }
     }
 
-    @Transactional(readOnly = true)
-    public List<PosComercio> findByComercio(String codigoComercio) {
-        log.info("Buscando POS por código de comercio: {}", codigoComercio);
-        return this.posComercioRepository.findByComercioCodigoComercio(codigoComercio);
+    private void validarComercioActivo(Comercio comercio) {
+        if (!"ACT".equals(comercio.getEstado())) {
+            throw new BusinessException("No se puede crear un POS para un comercio inactivo o suspendido");
+        }
     }
 
-    @Transactional(readOnly = true)
-    public List<PosComercio> findByEstado(String estado) {
-        log.info("Buscando POS por estado: {}", estado);
-        return this.posComercioRepository.findByEstado(estado);
+    private void validarLimitePosComercio(String codigoComercio) {
+        List<PosComercio> posExistentes = this.posComercioRepository.findByComercioCodigoComercio(codigoComercio);
+        if (posExistentes.size() >= MAX_POS_POR_COMERCIO) {
+            throw new BusinessException("El comercio ha alcanzado el límite máximo de " + MAX_POS_POR_COMERCIO + " POS");
+        }
     }
 
-    @Transactional(readOnly = true)
-    public List<PosComercio> findByDireccionMac(String direccionMac) {
-        log.info("Buscando POS por dirección MAC: {}", direccionMac);
-        return this.posComercioRepository.findByDireccionMac(direccionMac);
+    private void validarDireccionMac(String direccionMac) {
+        if (!MAC_PATTERN.matcher(direccionMac).matches()) {
+            throw new BusinessException("La dirección MAC no tiene un formato válido");
+        }
+    }
+
+    private void validarMacUnica(String direccionMac) {
+        List<PosComercio> posConMismaMac = this.posComercioRepository.findByDireccionMac(direccionMac);
+        if (!posConMismaMac.isEmpty()) {
+            throw new BusinessException("Ya existe un POS registrado con la dirección MAC proporcionada");
+        }
     }
 } 

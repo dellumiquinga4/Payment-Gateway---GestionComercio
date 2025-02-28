@@ -2,6 +2,8 @@ package com.banquito.gateway.gestion.banquito.service;
 
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
 import lombok.extern.slf4j.Slf4j;
 
 import com.banquito.gateway.gestion.banquito.model.Comercio;
@@ -19,6 +21,7 @@ public class ComercioService {
 
     private static final Pattern RUC_PATTERN = Pattern.compile("^[0-9]{13}$");
     private static final Pattern SWIFT_PATTERN = Pattern.compile("^[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?$");
+    private static final Pattern IBAN_PATTERN = Pattern.compile("^[A-Z]{2}[0-9]{2}[A-Z0-9]{1,30}$");
     private static final int MIN_MONTO_TRANSACCION = 1;
     private static final int MAX_MONTO_TRANSACCION = 10000;
 
@@ -29,9 +32,9 @@ public class ComercioService {
     }
 
     @Transactional(readOnly = true)
-    public List<Comercio> findAll() {
-        log.info("Obteniendo todos los comercios");
-        return this.comercioRepository.findAll();
+    public Page<Comercio> findAll(Pageable pageable) {
+        log.info("Obteniendo todos los comercios paginados");
+        return this.comercioRepository.findAll(pageable);
     }
 
     @Transactional(readOnly = true)
@@ -44,103 +47,51 @@ public class ComercioService {
     @Transactional
     public Comercio create(Comercio comercio) {
         log.info("Creando nuevo comercio: {}", comercio);
-
         
-        if (!RUC_PATTERN.matcher(comercio.getRuc()).matches()) {
-            throw new BusinessException("El RUC debe tener exactamente 13 dígitos numéricos");
-        }
-
-        
-        List<Comercio> comerciosExistentes = this.comercioRepository.findByRuc(comercio.getRuc());
-        if (!comerciosExistentes.isEmpty()) {
-            throw new BusinessException("Ya existe un comercio registrado con el RUC proporcionado");
-        }
-
-        
-        if (!SWIFT_PATTERN.matcher(comercio.getSwiftBanco()).matches()) {
-            throw new BusinessException("El código SWIFT del banco no tiene un formato válido");
-        }
-
-        
-        if (comercio.getMontoMaximoTransaccion() < comercio.getMontoMinimoTransaccion()) {
-            throw new BusinessException("El monto máximo de transacción debe ser mayor al monto mínimo");
-        }
-
-        if (comercio.getMontoMinimoTransaccion() < MIN_MONTO_TRANSACCION) {
-            throw new BusinessException("El monto mínimo de transacción no puede ser menor a " + MIN_MONTO_TRANSACCION);
-        }
-
-        if (comercio.getMontoMaximoTransaccion() > MAX_MONTO_TRANSACCION) {
-            throw new BusinessException("El monto máximo de transacción no puede ser mayor a " + MAX_MONTO_TRANSACCION);
-        }
-
-        
-        if (comercio.getNumeroCuenta() == null || comercio.getNumeroCuenta().trim().isEmpty()) {
-            throw new BusinessException("El número de cuenta bancaria es requerido");
-        }
+        validarRuc(comercio.getRuc());
+        validarSwiftBanco(comercio.getSwiftBanco());
+        validarIban(comercio.getCuentaIban());
+        validarComercioExistente(comercio.getRuc());
 
         comercio.setFechaCreacion(LocalDateTime.now());
+        comercio.setFechaActivacion(LocalDateTime.now());
         comercio.setEstado("ACT");
         return this.comercioRepository.save(comercio);
     }
 
     @Transactional
-    public Comercio update(String codigoComercio, Comercio comercio) {
-        log.info("Actualizando comercio con código: {}", codigoComercio);
+    public Comercio suspender(String codigoComercio) {
+        log.info("Suspendiendo comercio con código: {}", codigoComercio);
+        Comercio comercio = findById(codigoComercio);
         
-        Comercio comercioExistente = findById(codigoComercio);
-
-        
-        if (!RUC_PATTERN.matcher(comercio.getRuc()).matches()) {
-            throw new BusinessException("El RUC debe tener exactamente 13 dígitos numéricos");
+        if ("SUS".equals(comercio.getEstado())) {
+            throw new BusinessException("El comercio ya se encuentra suspendido");
         }
 
-        
-        if (!comercioExistente.getRuc().equals(comercio.getRuc())) {
-            List<Comercio> comerciosExistentes = this.comercioRepository.findByRuc(comercio.getRuc());
-            if (!comerciosExistentes.isEmpty()) {
-                throw new BusinessException("Ya existe un comercio registrado con el RUC proporcionado");
-            }
-        }
-
-        
-        if (!SWIFT_PATTERN.matcher(comercio.getSwiftBanco()).matches()) {
-            throw new BusinessException("El código SWIFT del banco no tiene un formato válido");
-        }
-
-        
-        if (comercio.getMontoMaximoTransaccion() < comercio.getMontoMinimoTransaccion()) {
-            throw new BusinessException("El monto máximo de transacción debe ser mayor al monto mínimo");
-        }
-
-        if (comercio.getMontoMinimoTransaccion() < MIN_MONTO_TRANSACCION) {
-            throw new BusinessException("El monto mínimo de transacción no puede ser menor a " + MIN_MONTO_TRANSACCION);
-        }
-
-        if (comercio.getMontoMaximoTransaccion() > MAX_MONTO_TRANSACCION) {
-            throw new BusinessException("El monto máximo de transacción no puede ser mayor a " + MAX_MONTO_TRANSACCION);
-        }
-
-        
-        if (comercio.getNumeroCuenta() == null || comercio.getNumeroCuenta().trim().isEmpty()) {
-            throw new BusinessException("El número de cuenta bancaria es requerido");
-        }
-
-        
-        if ("INA".equals(comercio.getEstado()) && "ACT".equals(comercioExistente.getEstado())) {
-            log.warn("Se está inactivando el comercio {}. Asegúrese de inactivar todos sus POS asociados.", codigoComercio);
-        }
-
-        comercio.setCodigoComercio(codigoComercio);
-        comercio.setFechaCreacion(comercioExistente.getFechaCreacion());
+        comercio.setEstado("SUS");
+        comercio.setFechaSuspension(LocalDateTime.now());
         return this.comercioRepository.save(comercio);
     }
 
-    @Transactional
-    public void delete(String codigoComercio) {
-        log.info("Eliminando comercio con código: {}", codigoComercio);
-        Comercio comercio = findById(codigoComercio);
-        this.comercioRepository.delete(comercio);
+    @Transactional(readOnly = true)
+    public List<Comercio> findByNombreComercial(String nombreComercial) {
+        log.info("Buscando comercios por nombre comercial: {}", nombreComercial);
+        return this.comercioRepository.findByNombreComercialContainingIgnoreCase(nombreComercial);
+    }
+
+    @Transactional(readOnly = true)
+    public Comercio findByCuentaIban(String cuentaIban) {
+        log.info("Buscando comercio por cuenta IBAN: {}", cuentaIban);
+        validarIban(cuentaIban);
+        return this.comercioRepository.findByCuentaIban(cuentaIban)
+                .orElseThrow(() -> new ComercioNotFoundException("cuenta IBAN: " + cuentaIban));
+    }
+
+    @Transactional(readOnly = true)
+    public List<Comercio> findByRuc(String ruc) {
+        log.info("Buscando comercios por RUC: {}", ruc);
+        validarRuc(ruc);
+        return this.comercioRepository.findByRuc(ruc);
     }
 
     @Transactional(readOnly = true)
@@ -150,14 +101,33 @@ public class ComercioService {
     }
 
     @Transactional(readOnly = true)
-    public List<Comercio> findByRuc(String ruc) {
-        log.info("Buscando comercios por RUC: {}", ruc);
-        return this.comercioRepository.findByRuc(ruc);
-    }
-
-    @Transactional(readOnly = true)
     public List<Comercio> findBySwiftBanco(String swiftBanco) {
         log.info("Buscando comercios por código SWIFT del banco: {}", swiftBanco);
         return this.comercioRepository.findBySwiftBanco(swiftBanco);
+    }
+
+    private void validarRuc(String ruc) {
+        if (!RUC_PATTERN.matcher(ruc).matches()) {
+            throw new BusinessException("El RUC debe tener exactamente 13 dígitos numéricos");
+        }
+    }
+
+    private void validarSwiftBanco(String swiftBanco) {
+        if (!SWIFT_PATTERN.matcher(swiftBanco).matches()) {
+            throw new BusinessException("El código SWIFT del banco no tiene un formato válido");
+        }
+    }
+
+    private void validarIban(String iban) {
+        if (iban != null && !iban.isEmpty() && !IBAN_PATTERN.matcher(iban).matches()) {
+            throw new BusinessException("El IBAN no tiene un formato válido");
+        }
+    }
+
+    private void validarComercioExistente(String ruc) {
+        List<Comercio> comerciosExistentes = this.comercioRepository.findByRuc(ruc);
+        if (!comerciosExistentes.isEmpty()) {
+            throw new BusinessException("Ya existe un comercio registrado con el RUC proporcionado");
+        }
     }
 } 

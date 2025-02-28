@@ -1,5 +1,8 @@
 package com.banquito.gateway.gestion.banquito.controller;
 
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import jakarta.validation.Valid;
@@ -20,7 +23,7 @@ import java.util.stream.Collectors;
 
 @RestController
 @RequestMapping("/v1/pos-comercios")
-@Tag(name = "POS Comercio", description = "API para gestionar POS de comercios")
+@Tag(name = "POS Comercio", description = "API para gestionar POS de comercios en el payment gateway")
 @Slf4j
 public class PosComercioController {
 
@@ -33,13 +36,13 @@ public class PosComercioController {
     }
 
     @GetMapping
-    @Operation(summary = "Obtener todos los POS", description = "Retorna una lista de todos los POS registrados")
+    @Operation(summary = "Listar POS", description = "Obtiene una lista paginada de todos los POS")
     @ApiResponse(responseCode = "200", description = "Lista de POS obtenida exitosamente")
-    public ResponseEntity<List<PosComercioDTO>> getAllPosComercio() {
+    public ResponseEntity<Page<PosComercioDTO>> getAllPosComercio(
+            @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(
-            this.posComercioService.findAll().stream()
+            this.posComercioService.findAll(pageable)
                 .map(posComercioMapper::toDTO)
-                .collect(Collectors.toList())
         );
     }
 
@@ -58,9 +61,9 @@ public class PosComercioController {
     }
 
     @PostMapping
-    @Operation(summary = "Crear nuevo POS", description = "Crea un nuevo POS con los datos proporcionados")
-    @ApiResponse(responseCode = "200", description = "POS creado exitosamente")
-    public ResponseEntity<PosComercioDTO> createPosComercio(
+    @Operation(summary = "Asignar POS", description = "Asigna un nuevo POS a un comercio")
+    @ApiResponse(responseCode = "200", description = "POS asignado exitosamente")
+    public ResponseEntity<PosComercioDTO> asignarPosComercio(
             @Parameter(description = "Datos del POS", required = true)
             @Valid @RequestBody PosComercioDTO posComercioDTO) {
         return ResponseEntity.ok(
@@ -72,30 +75,11 @@ public class PosComercioController {
         );
     }
 
-    @PutMapping("/{codigoPos}")
-    @Operation(summary = "Actualizar POS", description = "Actualiza los datos de un POS existente")
-    @ApiResponse(responseCode = "200", description = "POS actualizado exitosamente")
-    @ApiResponse(responseCode = "404", description = "POS no encontrado")
-    public ResponseEntity<PosComercioDTO> updatePosComercio(
-            @Parameter(description = "Código del POS", required = true)
-            @PathVariable String codigoPos,
-            @Parameter(description = "Datos actualizados del POS", required = true)
-            @Valid @RequestBody PosComercioDTO posComercioDTO) {
-        return ResponseEntity.ok(
-            this.posComercioMapper.toDTO(
-                this.posComercioService.update(
-                    codigoPos,
-                    this.posComercioMapper.toModel(posComercioDTO)
-                )
-            )
-        );
-    }
-
     @DeleteMapping("/{codigoPos}")
-    @Operation(summary = "Eliminar POS", description = "Elimina un POS existente")
-    @ApiResponse(responseCode = "204", description = "POS eliminado exitosamente")
+    @Operation(summary = "Remover POS", description = "Remueve un POS de un comercio")
+    @ApiResponse(responseCode = "204", description = "POS removido exitosamente")
     @ApiResponse(responseCode = "404", description = "POS no encontrado")
-    public ResponseEntity<Void> deletePosComercio(
+    public ResponseEntity<Void> removerPosComercio(
             @Parameter(description = "Código del POS", required = true)
             @PathVariable String codigoPos) {
         this.posComercioService.delete(codigoPos);
@@ -103,26 +87,26 @@ public class PosComercioController {
     }
 
     @GetMapping("/comercio/{codigoComercio}")
-    @Operation(summary = "Buscar POS por comercio", description = "Retorna una lista de POS que pertenecen al comercio especificado")
+    @Operation(summary = "Listar POS por comercio", description = "Retorna una lista paginada de POS que pertenecen al comercio especificado")
     @ApiResponse(responseCode = "200", description = "Lista de POS obtenida exitosamente")
-    public ResponseEntity<List<PosComercioDTO>> getPosByComercio(
+    public ResponseEntity<Page<PosComercioDTO>> getPosByComercio(
             @Parameter(description = "Código del comercio", required = true)
-            @PathVariable String codigoComercio) {
+            @PathVariable String codigoComercio,
+            @PageableDefault(size = 10) Pageable pageable) {
         return ResponseEntity.ok(
-            this.posComercioService.findByComercio(codigoComercio).stream()
+            this.posComercioService.findByComercio(codigoComercio, pageable)
                 .map(posComercioMapper::toDTO)
-                .collect(Collectors.toList())
         );
     }
 
-    @GetMapping("/estado/{estado}")
-    @Operation(summary = "Buscar POS por estado", description = "Retorna una lista de POS que coinciden con el estado especificado")
+    @GetMapping("/modelo/{modelo}")
+    @Operation(summary = "Buscar POS por modelo", description = "Retorna una lista de POS que coinciden con el modelo especificado")
     @ApiResponse(responseCode = "200", description = "Lista de POS obtenida exitosamente")
-    public ResponseEntity<List<PosComercioDTO>> getPosByEstado(
-            @Parameter(description = "Estado del POS (ACT, INA)", required = true)
-            @PathVariable String estado) {
+    public ResponseEntity<List<PosComercioDTO>> getPosByModelo(
+            @Parameter(description = "Modelo del POS", required = true)
+            @PathVariable String modelo) {
         return ResponseEntity.ok(
-            this.posComercioService.findByEstado(estado).stream()
+            this.posComercioService.findByModelo(modelo).stream()
                 .map(posComercioMapper::toDTO)
                 .collect(Collectors.toList())
         );
