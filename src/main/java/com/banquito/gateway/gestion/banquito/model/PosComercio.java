@@ -13,14 +13,17 @@ import java.time.LocalDateTime;
 public class PosComercio {
 
     @Id
-    @Column(name = "CODIGO_POS", nullable = false, length = 15)
+    @Column(name = "CODIGO_POS", nullable = false, length = 10)
     private String codigoPos;
 
+    @Column(name = "MODELO", nullable = false, length = 10)
+    private String modelo;
+
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "CODIGO_COMERCIO", nullable = false)
+    @JoinColumn(name = "COD_COMERCIO", nullable = false)
     private Comercio comercio;
 
-    @Column(name = "DIRECCION_MAC", nullable = false, length = 100)
+    @Column(name = "DIRECCION_MAC", nullable = false, length = 32)
     private String direccionMac;
 
     @Column(name = "ESTADO", nullable = false, length = 3)

@@ -13,14 +13,17 @@ import java.time.LocalDateTime;
 public class Comercio {
 
     @Id
-    @Column(name = "CODIGO_COMERCIO", nullable = false, length = 15)
+    @Column(name = "COD_COMERCIO", nullable = false)
     private String codigoComercio;
 
-    @Column(name = "CODIGO_EXTERNO", nullable = false, length = 15)
-    private String codigoExterno;
+    @Column(name = "CODIGO_INTERNO", nullable = false, length = 10)
+    private String codigoInterno;
 
     @Column(name = "RUC", nullable = false, length = 13)
     private String ruc;
+
+    @Column(name = "RAZON_SOCIAL", nullable = false, length = 100)
+    private String razonSocial;
 
     @Column(name = "NOMBRE_COMERCIAL", nullable = false, length = 100)
     private String nombreComercial;
@@ -28,14 +31,23 @@ public class Comercio {
     @Column(name = "FECHA_CREACION", nullable = false)
     private LocalDateTime fechaCreacion;
 
+    @Column(name = "COD_COMISION", nullable = false)
+    private Integer codigoComision;
+
     @Column(name = "ESTADO", nullable = false, length = 3)
     private String estado;
 
     @Column(name = "SWIFT_BANCO", nullable = false, length = 11)
     private String swiftBanco;
 
-    @Column(name = "CUENTA_SUSPENSION", length = 25)
-    private String cuentaSuspension;
+    @Column(name = "CUENTA_IBAN", length = 28)
+    private String cuentaIban;
+
+    @Column(name = "FECHA_ACTIVACION")
+    private LocalDateTime fechaActivacion;
+
+    @Column(name = "FECHA_SUSPENSION")
+    private LocalDateTime fechaSuspension;
 
     public Comercio(String codigoComercio) {
         this.codigoComercio = codigoComercio;
