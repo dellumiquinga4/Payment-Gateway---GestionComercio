@@ -9,9 +9,13 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
 import com.banquito.gateway.gestion.banquito.controller.dto.PosComercioDTO;
+import com.banquito.gateway.gestion.banquito.controller.dto.ComercioInfoDTO;
 import com.banquito.gateway.gestion.banquito.controller.mapper.PosComercioMapper;
 import com.banquito.gateway.gestion.banquito.service.PosComercioService;
+import com.banquito.gateway.gestion.banquito.service.ComercioService;
 import com.banquito.gateway.gestion.banquito.exception.PosComercioNotFoundException;
+import com.banquito.gateway.gestion.banquito.model.PosComercio;
+import com.banquito.gateway.gestion.banquito.model.Comercio;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,10 +33,12 @@ public class PosComercioController {
 
     private final PosComercioService posComercioService;
     private final PosComercioMapper posComercioMapper;
+    private final ComercioService comercioService;
 
-    public PosComercioController(PosComercioService posComercioService, PosComercioMapper posComercioMapper) {
+    public PosComercioController(PosComercioService posComercioService, PosComercioMapper posComercioMapper, ComercioService comercioService) {
         this.posComercioService = posComercioService;
         this.posComercioMapper = posComercioMapper;
+        this.comercioService = comercioService;
     }
 
     @GetMapping
@@ -66,13 +72,19 @@ public class PosComercioController {
     public ResponseEntity<PosComercioDTO> asignarPosComercio(
             @Parameter(description = "Datos del POS", required = true)
             @Valid @RequestBody PosComercioDTO posComercioDTO) {
-        return ResponseEntity.ok(
-            this.posComercioMapper.toDTO(
-                this.posComercioService.create(
-                    this.posComercioMapper.toModel(posComercioDTO)
-                )
-            )
-        );
+        // Primero obtenemos el comercio de la base de datos
+        Comercio comercio = this.comercioService.findById(posComercioDTO.getCodigoComercio());
+        
+        // Creamos el nuevo POS
+        PosComercio posComercio = new PosComercio();
+        posComercio.setCodigoPos(posComercioDTO.getCodigoPos());
+        posComercio.setModelo(posComercioDTO.getModelo());
+        posComercio.setDireccionMac(posComercioDTO.getDireccionMac());
+        posComercio.setEstado(posComercioDTO.getEstado());
+        posComercio.setComercio(comercio);
+        
+        PosComercio createdPos = this.posComercioService.create(posComercio);
+        return ResponseEntity.ok(this.posComercioMapper.toDTO(createdPos));
     }
 
     @DeleteMapping("/{codigoPos}")
@@ -121,6 +133,26 @@ public class PosComercioController {
             @PathVariable String codigoPos) {
         this.posComercioService.actualizarUltimoUso(codigoPos);
         return ResponseEntity.noContent().build();
+    }
+
+    @GetMapping("/comercio/{codigoPos}")
+    @Operation(summary = "Obtener información del comercio por POS", description = "Retorna información específica del comercio asociado al POS")
+    @ApiResponse(responseCode = "200", description = "Información del comercio obtenida exitosamente")
+    @ApiResponse(responseCode = "404", description = "POS no encontrado")
+    public ResponseEntity<ComercioInfoDTO> getComercioInfoByPos(
+            @Parameter(description = "Código del POS", required = true)
+            @PathVariable String codigoPos) {
+        PosComercio pos = this.posComercioService.findById(codigoPos);
+        Comercio comercio = pos.getComercio();
+        
+        ComercioInfoDTO dto = new ComercioInfoDTO();
+        dto.setCodigo_comercio(comercio.getCodigoComercio());
+        dto.setNombre_comercio(comercio.getNombreComercial());
+        dto.setSwift_banco(comercio.getSwiftBanco());
+        dto.setCuenta_iban(comercio.getCuentaIban());
+        dto.setEstado(comercio.getEstado().equals("ACT") ? "ACTIVO" : "INACTIVO");
+        
+        return ResponseEntity.ok(dto);
     }
 
     @ExceptionHandler(PosComercioNotFoundException.class)

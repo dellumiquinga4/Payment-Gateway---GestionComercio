@@ -9,9 +9,13 @@ import jakarta.validation.Valid;
 import lombok.extern.slf4j.Slf4j;
 
 import com.banquito.gateway.gestion.banquito.controller.dto.ComercioDTO;
+import com.banquito.gateway.gestion.banquito.controller.dto.ComercioInfoDTO;
 import com.banquito.gateway.gestion.banquito.controller.mapper.ComercioMapper;
 import com.banquito.gateway.gestion.banquito.service.ComercioService;
+import com.banquito.gateway.gestion.banquito.service.PosComercioService;
 import com.banquito.gateway.gestion.banquito.exception.ComercioNotFoundException;
+import com.banquito.gateway.gestion.banquito.model.Comercio;
+import com.banquito.gateway.gestion.banquito.model.PosComercio;
 
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -29,10 +33,12 @@ public class ComercioController {
 
     private final ComercioService comercioService;
     private final ComercioMapper comercioMapper;
+    private final PosComercioService posComercioService;
 
-    public ComercioController(ComercioService comercioService, ComercioMapper comercioMapper) {
+    public ComercioController(ComercioService comercioService, ComercioMapper comercioMapper, PosComercioService posComercioService) {
         this.comercioService = comercioService;
         this.comercioMapper = comercioMapper;
+        this.posComercioService = posComercioService;
     }
 
     @GetMapping
@@ -127,6 +133,28 @@ public class ComercioController {
                 .map(comercioMapper::toDTO)
                 .collect(Collectors.toList())
         );
+    }
+
+    @GetMapping("/pos/{codigoPos}")
+    @Operation(summary = "Obtener información del comercio por POS", description = "Retorna información específica del comercio asociado al POS")
+    @ApiResponse(responseCode = "200", description = "Información del comercio obtenida exitosamente")
+    @ApiResponse(responseCode = "404", description = "POS o comercio no encontrado")
+    public ResponseEntity<ComercioInfoDTO> getComercioInfoByPos(
+            @Parameter(description = "Código del POS", required = true)
+            @PathVariable String codigoPos) {
+        log.info("Obteniendo información del comercio para el POS: {}", codigoPos);
+        
+        PosComercio pos = this.posComercioService.findById(codigoPos);
+        Comercio comercio = pos.getComercio();
+        
+        ComercioInfoDTO dto = new ComercioInfoDTO();
+        dto.setCodigo_comercio(comercio.getCodigoComercio());
+        dto.setNombre_comercio(comercio.getNombreComercial());
+        dto.setSwift_banco(comercio.getSwiftBanco());
+        dto.setCuenta_iban(comercio.getCuentaIban());
+        dto.setEstado(comercio.getEstado().equals("ACT") ? "ACTIVO" : "INACTIVO");
+        
+        return ResponseEntity.ok(dto);
     }
 
     @ExceptionHandler(ComercioNotFoundException.class)

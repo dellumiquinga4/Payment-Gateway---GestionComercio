@@ -50,18 +50,33 @@ public class PosComercioService {
     public PosComercio create(PosComercio posComercio) {
         log.info("Creando nuevo POS comercio: {}", posComercio);
         
+        
+        if (this.posComercioRepository.findById(posComercio.getCodigoPos()).isPresent()) {
+            throw new BusinessException("Ya existe un POS con el código: " + posComercio.getCodigoPos());
+        }
+        
+        
         Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
+        log.info("Comercio encontrado: {}", comercio);
+        
+        
         validarComercioActivo(comercio);
         validarLimitePosComercio(comercio.getCodigoComercio());
         validarDireccionMac(posComercio.getDireccionMac());
         validarMacUnica(posComercio.getDireccionMac());
 
-        posComercio.setComercio(comercio);
+        
         posComercio.setFechaActivacion(LocalDateTime.now());
         posComercio.setEstado("ACT");
         posComercio.setUltimoUso(LocalDateTime.now());
+        posComercio.setComercio(comercio);
 
-        return this.posComercioRepository.save(posComercio);
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al guardar el POS: {}", e.getMessage());
+            throw new BusinessException("Error al guardar el POS: " + e.getMessage());
+        }
     }
 
     @Transactional

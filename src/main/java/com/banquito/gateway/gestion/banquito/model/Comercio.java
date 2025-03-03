@@ -3,17 +3,19 @@ package com.banquito.gateway.gestion.banquito.model;
 import jakarta.persistence.*;
 import lombok.*;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
+import java.util.List;
 
 @Entity
 @Table(name = "GTW_COMERCIO")
 @Getter
 @Setter
-@ToString
+@ToString(exclude = "posComercioList")
 @NoArgsConstructor
 public class Comercio {
 
     @Id
-    @Column(name = "COD_COMERCIO", nullable = false)
+    @Column(name = "CODIGO_COMERCIO", nullable = false)
     private String codigoComercio;
 
     @Column(name = "CODIGO_INTERNO", nullable = false, length = 10)
@@ -49,8 +51,21 @@ public class Comercio {
     @Column(name = "FECHA_SUSPENSION")
     private LocalDateTime fechaSuspension;
 
+    @OneToMany(mappedBy = "comercio", cascade = CascadeType.ALL, orphanRemoval = true)
+    private List<PosComercio> posComercioList = new ArrayList<>();
+
     public Comercio(String codigoComercio) {
         this.codigoComercio = codigoComercio;
+    }
+
+    public void addPosComercio(PosComercio posComercio) {
+        posComercioList.add(posComercio);
+        posComercio.setComercio(this);
+    }
+
+    public void removePosComercio(PosComercio posComercio) {
+        posComercioList.remove(posComercio);
+        posComercio.setComercio(null);
     }
 
     @Override

@@ -8,7 +8,7 @@ import java.time.LocalDateTime;
 @Table(name = "GTW_POS_COMERCIO")
 @Getter
 @Setter
-@ToString
+@ToString(exclude = "comercio")
 @NoArgsConstructor
 public class PosComercio {
 
@@ -19,8 +19,8 @@ public class PosComercio {
     @Column(name = "MODELO", nullable = false, length = 10)
     private String modelo;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "COD_COMERCIO", nullable = false)
+    @ManyToOne(fetch = FetchType.EAGER)
+    @JoinColumn(name = "CODIGO_COMERCIO", referencedColumnName = "CODIGO_COMERCIO", nullable = false)
     private Comercio comercio;
 
     @Column(name = "DIRECCION_MAC", nullable = false, length = 32)
