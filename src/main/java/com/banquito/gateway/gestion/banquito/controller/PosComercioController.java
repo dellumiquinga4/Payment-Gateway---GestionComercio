@@ -45,7 +45,8 @@ public class PosComercioController {
     @Operation(summary = "Listar POS", description = "Obtiene una lista paginada de todos los POS")
     @ApiResponse(responseCode = "200", description = "Lista de POS obtenida exitosamente")
     public ResponseEntity<Page<PosComercioDTO>> getAllPosComercio(
-            @PageableDefault(size = 10) Pageable pageable) {
+            @PageableDefault(size = 10, sort = "codigoPos") Pageable pageable) {
+        log.info("Obteniendo lista paginada de POS con configuración: {}", pageable);
         return ResponseEntity.ok(
             this.posComercioService.findAll(pageable)
                 .map(posComercioMapper::toDTO)
@@ -72,10 +73,10 @@ public class PosComercioController {
     public ResponseEntity<PosComercioDTO> asignarPosComercio(
             @Parameter(description = "Datos del POS", required = true)
             @Valid @RequestBody PosComercioDTO posComercioDTO) {
-        // Primero obtenemos el comercio de la base de datos
+        
         Comercio comercio = this.comercioService.findById(posComercioDTO.getCodigoComercio());
         
-        // Creamos el nuevo POS
+        
         PosComercio posComercio = new PosComercio();
         posComercio.setCodigoPos(posComercioDTO.getCodigoPos());
         posComercio.setModelo(posComercioDTO.getModelo());
@@ -135,7 +136,7 @@ public class PosComercioController {
         return ResponseEntity.noContent().build();
     }
 
-    @GetMapping("/comercio/{codigoPos}")
+    @GetMapping("/{codigoPos}/comercio-info")
     @Operation(summary = "Obtener información del comercio por POS", description = "Retorna información específica del comercio asociado al POS")
     @ApiResponse(responseCode = "200", description = "Información del comercio obtenida exitosamente")
     @ApiResponse(responseCode = "404", description = "POS no encontrado")
@@ -153,6 +154,40 @@ public class PosComercioController {
         dto.setEstado(comercio.getEstado().equals("ACT") ? "ACTIVO" : "INACTIVO");
         
         return ResponseEntity.ok(dto);
+    }
+
+    @PatchMapping("/{codigoPos}/asignar/{codigoComercio}")
+    @Operation(summary = "Asignar POS existente a comercio", description = "Asigna un POS existente a un comercio existente")
+    @ApiResponse(responseCode = "200", description = "POS asignado exitosamente")
+    @ApiResponse(responseCode = "404", description = "POS o comercio no encontrado")
+    public ResponseEntity<PosComercioDTO> asignarPosExistente(
+            @Parameter(description = "Código del POS", required = true) @PathVariable String codigoPos,
+            @Parameter(description = "Código del comercio", required = true) @PathVariable String codigoComercio) {
+        log.info("Asignando POS {} al comercio {}", codigoPos, codigoComercio);
+        
+        PosComercio pos = this.posComercioService.findById(codigoPos);
+        Comercio comercio = this.comercioService.findById(codigoComercio);
+        
+        pos.setComercio(comercio);
+        PosComercio posActualizado = this.posComercioService.update(pos);
+        
+        return ResponseEntity.ok(this.posComercioMapper.toDTO(posActualizado));
+    }
+
+    @PatchMapping("/{codigoPos}/estado/{nuevoEstado}")
+    @Operation(summary = "Actualizar estado del POS", description = "Actualiza el estado de un POS (ACT/INA)")
+    @ApiResponse(responseCode = "200", description = "Estado del POS actualizado exitosamente")
+    @ApiResponse(responseCode = "404", description = "POS no encontrado")
+    @ApiResponse(responseCode = "400", description = "Estado inválido")
+    public ResponseEntity<PosComercioDTO> actualizarEstadoPos(
+            @Parameter(description = "Código del POS", required = true) 
+            @PathVariable String codigoPos,
+            @Parameter(description = "Nuevo estado (ACT/INA)", required = true) 
+            @PathVariable String nuevoEstado) {
+        log.info("Actualizando estado del POS {} a {}", codigoPos, nuevoEstado);
+        
+        PosComercio posActualizado = this.posComercioService.actualizarEstado(codigoPos, nuevoEstado);
+        return ResponseEntity.ok(this.posComercioMapper.toDTO(posActualizado));
     }
 
     @ExceptionHandler(PosComercioNotFoundException.class)

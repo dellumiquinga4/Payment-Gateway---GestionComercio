@@ -134,6 +134,52 @@ public class PosComercioService {
         }
     }
 
+    @Transactional
+    public PosComercio update(PosComercio posComercio) {
+        log.info("Actualizando POS comercio: {}", posComercio);
+        
+        
+        Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
+        validarComercioActivo(comercio);
+        
+       
+        
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al actualizar el POS: {}", e.getMessage());
+            throw new BusinessException("Error al actualizar el POS: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public PosComercio actualizarEstado(String codigoPos, String nuevoEstado) {
+        log.info("Actualizando estado del POS {} a {}", codigoPos, nuevoEstado);
+        
+        if (!nuevoEstado.equals("ACT") && !nuevoEstado.equals("INA")) {
+            throw new BusinessException("El estado debe ser ACT o INA");
+        }
+
+        PosComercio posComercio = findById(codigoPos);
+        
+        if (nuevoEstado.equals(posComercio.getEstado())) {
+            throw new BusinessException("El POS ya se encuentra en estado: " + nuevoEstado);
+        }
+
+        posComercio.setEstado(nuevoEstado);
+        
+        if (nuevoEstado.equals("ACT")) {
+            posComercio.setFechaActivacion(LocalDateTime.now());
+        }
+
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al actualizar el estado del POS: {}", e.getMessage());
+            throw new BusinessException("Error al actualizar el estado del POS: " + e.getMessage());
+        }
+    }
+
     private void validarComercioActivo(Comercio comercio) {
         if (!"ACT".equals(comercio.getEstado())) {
             throw new BusinessException("No se puede crear un POS para un comercio inactivo o suspendido");
