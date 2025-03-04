@@ -50,18 +50,33 @@ public class PosComercioService {
     public PosComercio create(PosComercio posComercio) {
         log.info("Creando nuevo POS comercio: {}", posComercio);
         
+        
+        if (this.posComercioRepository.findById(posComercio.getCodigoPos()).isPresent()) {
+            throw new BusinessException("Ya existe un POS con el código: " + posComercio.getCodigoPos());
+        }
+        
+        
         Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
+        log.info("Comercio encontrado: {}", comercio);
+        
+        
         validarComercioActivo(comercio);
         validarLimitePosComercio(comercio.getCodigoComercio());
         validarDireccionMac(posComercio.getDireccionMac());
         validarMacUnica(posComercio.getDireccionMac());
 
-        posComercio.setComercio(comercio);
+        
         posComercio.setFechaActivacion(LocalDateTime.now());
         posComercio.setEstado("ACT");
         posComercio.setUltimoUso(LocalDateTime.now());
+        posComercio.setComercio(comercio);
 
-        return this.posComercioRepository.save(posComercio);
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al guardar el POS: {}", e.getMessage());
+            throw new BusinessException("Error al guardar el POS: " + e.getMessage());
+        }
     }
 
     @Transactional
@@ -116,6 +131,52 @@ public class PosComercioService {
                     this.posComercioRepository.save(pos);
                 }
             }
+        }
+    }
+
+    @Transactional
+    public PosComercio update(PosComercio posComercio) {
+        log.info("Actualizando POS comercio: {}", posComercio);
+        
+        
+        Comercio comercio = this.comercioService.findById(posComercio.getComercio().getCodigoComercio());
+        validarComercioActivo(comercio);
+        
+       
+        
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al actualizar el POS: {}", e.getMessage());
+            throw new BusinessException("Error al actualizar el POS: " + e.getMessage());
+        }
+    }
+
+    @Transactional
+    public PosComercio actualizarEstado(String codigoPos, String nuevoEstado) {
+        log.info("Actualizando estado del POS {} a {}", codigoPos, nuevoEstado);
+        
+        if (!nuevoEstado.equals("ACT") && !nuevoEstado.equals("INA")) {
+            throw new BusinessException("El estado debe ser ACT o INA");
+        }
+
+        PosComercio posComercio = findById(codigoPos);
+        
+        if (nuevoEstado.equals(posComercio.getEstado())) {
+            throw new BusinessException("El POS ya se encuentra en estado: " + nuevoEstado);
+        }
+
+        posComercio.setEstado(nuevoEstado);
+        
+        if (nuevoEstado.equals("ACT")) {
+            posComercio.setFechaActivacion(LocalDateTime.now());
+        }
+
+        try {
+            return this.posComercioRepository.save(posComercio);
+        } catch (Exception e) {
+            log.error("Error al actualizar el estado del POS: {}", e.getMessage());
+            throw new BusinessException("Error al actualizar el estado del POS: " + e.getMessage());
         }
     }
 
